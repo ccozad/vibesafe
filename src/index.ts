@@ -8,9 +8,11 @@ import { scanFileForSecrets, SecretFinding } from './scanners/secrets';
 import { detectPackageManagers, parseDependencies, lookupCves, DependencyInfo, DependencyFinding, FindingSeverity } from './scanners/dependencies';
 import { getFilesToScan, checkGitignoreStatus, GitignoreWarning } from './utils/fileTraversal';
 import { generateMarkdownReport } from './reporting/markdown';
-import path from 'path';
+
 import fs from 'fs';
+import path from 'path';
 import chalk from 'chalk';
+import { ScanOptions } from './utils/scanOptions'
 import { scanConfigFile, ConfigFinding } from './scanners/configuration';
 import { scanForUnvalidatedUploads, UploadFinding } from './scanners/uploads';
 import { scanForExposedEndpoints, EndpointFinding } from './scanners/endpoints';
@@ -54,29 +56,8 @@ program.command('scan')
   .option('-r, --report [file]', 'Specify Markdown report file path (defaults to VIBESAFE-REPORT.md)')
   .option('--high-only', 'Only report high severity issues')
   .action(async (directory, options) => {
-    const rootDir = path.resolve(directory);
-    console.log(`Scanning directory: ${rootDir}`);
-    if (options.highOnly) {
-      console.log('(--high-only flag detected)');
-    }
-    if (options.output) {
-      console.log(`JSON output will be written to: ${options.output}`);
-    }
+    const scanOptions = new ScanOptions(directory, options);
     
-    // Determine report path based on options
-    let reportPath: string | null = null;
-    if (options.report) { // Check if -r or --report was used
-        if (typeof options.report === 'string') {
-            // User provided a specific filename
-            reportPath = path.resolve(options.report);
-            console.log(`Markdown report will be written to: ${reportPath}`);
-        } else {
-            // User used the flag without a filename, use default
-            reportPath = path.join(rootDir, 'VIBESAFE-REPORT.md');
-            console.log(`Markdown report will be written to default location: ${reportPath}`);
-        }
-    }
-
     // --- Moved: Check .gitignore Status --- 
     // We will call checkGitignoreStatus later, just declare the variable here
     let gitignoreWarnings: GitignoreWarning[] = [];
@@ -96,7 +77,7 @@ program.command('scan')
     const configFilesToScan = filesToScan.filter(f => /\.(json|ya?ml)$/i.test(f));
 
     // --- Detect Package Manager (Phase 3.1) ---
-    const detectedManagers = detectPackageManagers(filesToScan, rootDir);
+    const detectedManagers = detectPackageManagers(filesToScan, scanOptions.getRootDirectory());
     // Use Object.keys() to get the names from the map for logging
     const managerNames = Object.keys(detectedManagers);
     console.log(`Detected package managers: ${managerNames.length > 0 ? managerNames.join(', ') : 'none'}`);
@@ -152,7 +133,7 @@ program.command('scan')
     console.log(`Scanning ${filesToScan.length} files for secrets...`);
     filesToScan.forEach(filePath => {
         const findings = scanFileForSecrets(filePath);
-        const relativeFindings = findings.map(f => ({ ...f, file: path.relative(rootDir, f.file) }));
+        const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
         allSecretFindings = allSecretFindings.concat(relativeFindings);
     });
 
@@ -170,7 +151,7 @@ program.command('scan')
     console.log(`Scanning ${configFilesToScan.length} potential config files...`);
     configFilesToScan.forEach(filePath => {
         const findings = scanConfigFile(filePath);
-        const relativeFindings = findings.map(f => ({ ...f, file: path.relative(rootDir, f.file) }));
+        const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
         allConfigFindings = allConfigFindings.concat(relativeFindings);
     });
 
@@ -183,11 +164,11 @@ program.command('scan')
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
             const findings = scanForUnvalidatedUploads(filePath, content, detectedTech.hasBackend);
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(rootDir, f.file) }));
+            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
             allUploadFindings = allUploadFindings.concat(relativeFindings);
         } catch (error: any) {
             // Avoid crashing if a single file fails (e.g., read permission)
-            console.warn(chalk.yellow(`Could not scan ${path.relative(rootDir, filePath)} for uploads: ${error.message}`));
+            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for uploads: ${error.message}`));
         }
     });
 
@@ -199,12 +180,12 @@ program.command('scan')
     filesForEndpointScan.forEach(filePath => {
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForExposedEndpoints(rootDir, filePath, content, detectedTech);
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(rootDir, f.file) }));
+            const findings = scanForExposedEndpoints(scanOptions.getRootDirectory(), filePath, content, detectedTech);
+            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
             allEndpointFindings = allEndpointFindings.concat(relativeFindings);
         } catch (error: any) {
             // Avoid crashing if a single file fails (e.g., read permission)
-            console.warn(chalk.yellow(`Could not scan ${path.relative(rootDir, filePath)} for endpoints: ${error.message}`));
+            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for endpoints: ${error.message}`));
         }
     });
 
@@ -224,10 +205,10 @@ program.command('scan')
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
             const findings = scanForLoggingIssues(filePath, content, detectedTech.hasBackend);
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(rootDir, f.file) }));
+            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
             allLoggingFindings = allLoggingFindings.concat(relativeFindings);
         } catch (error: any) {
-            console.warn(chalk.yellow(`Could not scan ${path.relative(rootDir, filePath)} for logging issues: ${error.message}`));
+            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for logging issues: ${error.message}`));
         }
     });
 
@@ -237,11 +218,11 @@ program.command('scan')
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
             const findings = scanForHttpClientIssues(filePath, content, detectedTech.hasBackend);
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(rootDir, f.file) }));
+            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
             allHttpClientFindings = allHttpClientFindings.concat(relativeFindings);
         } catch (error: any) {
             // Avoid crashing if a single file fails
-            console.warn(chalk.yellow(`Could not scan ${path.relative(rootDir, filePath)} for HTTP client issues: ${error.message}`));
+            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for HTTP client issues: ${error.message}`));
         }
     });
 
@@ -293,10 +274,10 @@ program.command('scan')
         : allHttpClientFindings;
 
     // --- NOW Check Gitignore Status --- 
-    gitignoreWarnings = checkGitignoreStatus(rootDir);
+    gitignoreWarnings = checkGitignoreStatus(scanOptions.getRootDirectory());
 
     // --- Report Generation (Phase 4) ---
-    if (reportPath) {
+    if (scanOptions.getReportPath()) {
         const reportData = {
             secretFindings: reportSecretFindings,
             dependencyFindings: reportDependencyFindings,
@@ -311,8 +292,8 @@ program.command('scan')
         };
         try {
             const markdownContent = await generateMarkdownReport(reportData);
-            fs.writeFileSync(reportPath, markdownContent);
-            console.log(chalk.green(`\nMarkdown report generated successfully at ${reportPath}`));
+            fs.writeFileSync(scanOptions.getReportPath() ?? "", markdownContent);
+            console.log(chalk.green(`\nMarkdown report generated successfully at ${scanOptions.getReportPath()}`));
         } catch (error: any) {
             console.error(chalk.red(`\nFailed to generate Markdown report: ${error.message}`));
             process.exit(1);
@@ -342,7 +323,7 @@ program.command('scan')
     }
     
     // --- Console Output (Phase 5.1) ---
-    const suppressConsole = !!reportPath || !!options.output;
+    const suppressConsole = !!scanOptions.getReportPath() || !!options.output;
 
     if (!suppressConsole) {
         // Gitignore Warnings
