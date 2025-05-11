@@ -5,7 +5,7 @@ import 'dotenv/config';
 
 import { Command } from 'commander';
 import { SecretFinding } from './scanners/secrets';
-import { lookupCves, DependencyFinding, FindingSeverity } from './scanners/dependencies';
+import { DependencyFinding, FindingSeverity } from './scanners/dependencies';
 import { checkGitignoreStatus, GitignoreWarning } from './utils/fileTraversal';
 import { generateMarkdownReport } from './reporting/markdown';
 
@@ -16,7 +16,7 @@ import { ScanOptions } from './utils/scanOptions'
 import { ScanTarget } from './utils/scanTarget';
 import { ConfigFinding } from './scanners/configuration';
 import { UploadFinding } from './scanners/uploads';
-import { scanForExposedEndpoints, EndpointFinding } from './scanners/endpoints';
+import { EndpointFinding } from './scanners/endpoints';
 import { checkRateLimitHeuristic, RateLimitFinding } from './scanners/rateLimiting';
 import { scanForLoggingIssues, LoggingFinding } from './scanners/logging';
 import { scanForHttpClientIssues, HttpClientFinding } from './scanners/httpClient';
@@ -57,9 +57,6 @@ program.command('scan')
   .option('-r, --report [file]', 'Specify Markdown report file path (defaults to VIBESAFE-REPORT.md)')
   .option('--high-only', 'Only report high severity issues')
   .action(async (directory, options) => {
-    const scanOptions = new ScanOptions(directory, options);
-    const scanTarget = new ScanTarget(scanOptions.getRootDirectory());
-    
     // --- Moved: Check .gitignore Status --- 
     // We will call checkGitignoreStatus later, just declare the variable here
     let gitignoreWarnings: GitignoreWarning[] = [];
@@ -73,6 +70,9 @@ program.command('scan')
     let allRateLimitFindings: RateLimitFinding[] = [];
     let allLoggingFindings: LoggingFinding[] = [];
     let allHttpClientFindings: HttpClientFinding[] = [];
+
+    const scanOptions = new ScanOptions(directory, options);
+    const scanTarget = new ScanTarget(scanOptions.getRootDirectory());
  
     const allVibeChecks = createAllVibeChecks();
 
@@ -89,55 +89,11 @@ program.command('scan')
         }
     }
 
-    // --- Secrets Scan (Phase 2.1 / 2.3) ---
-    /*console.log(`Scanning ${scanTarget.getFiles().length} files for secrets...`);
-    scanTarget.getFiles().forEach(filePath => {
-        const findings = scanFileForSecrets(filePath);
-        const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
-        allSecretFindings = allSecretFindings.concat(relativeFindings);
-    });*/
-
-    // --- Dependency CVE Lookup (Phase 3.3 & 3.4) ---
-    if (scanTarget.hasDependencies()) {
-        allDependencyFindings = await lookupCves(scanTarget.getDependencies());
-        const vulnCount = allDependencyFindings.reduce((count, dep) => count + dep.vulnerabilities.length, 0);
-        const highOrCriticalVulnCount = allDependencyFindings.filter(dep => dep.maxSeverity === 'High' || dep.maxSeverity === 'Critical').length;
-        console.log(`CVE lookup complete. Found ${vulnCount} vulnerabilities (${highOrCriticalVulnCount} High/Critical) across dependencies.`);
-    } else {
-        console.log('Skipping CVE lookup as no dependencies were parsed.');
-    }
-
-    // --- Configuration Scan (Phase 6.1) ---
-    /*const configFiles = scanTarget.getFilesMatching(/\.config\.(json|ya?ml)$/i);
-    console.log(`Scanning ${configFiles.length} potential config files...`);
-    configFiles.forEach(filePath => {
-        const findings = scanConfigFile(filePath);
-        const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
-        allConfigFindings = allConfigFindings.concat(relativeFindings);
-    });*/
-
-    // --- Upload Scan (Phase 6.2) ---
-    // Define file extensions relevant for upload checks
-    /*const UPLOAD_SCAN_EXTENSIONS = ['.js', '.ts', '.jsx', '.tsx', '.vue', '.html'];
-    const filesForUploadScan = scanTarget.getFilesWithExtesions(UPLOAD_SCAN_EXTENSIONS);
-    console.log(`Scanning ${filesForUploadScan.length} files for potential upload issues...`);
-    filesForUploadScan.forEach(filePath => {
-        try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForUnvalidatedUploads(filePath, content, detectedTech.hasBackend);
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
-            allUploadFindings = allUploadFindings.concat(relativeFindings);
-        } catch (error: any) {
-            // Avoid crashing if a single file fails (e.g., read permission)
-            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for uploads: ${error.message}`));
-        }
-    });*/
-
     // --- Endpoint Scan (Phase 6.3) ---
     // Define file extensions relevant for endpoint checks (JS/TS files)
     const ENDPOINT_SCAN_EXTENSIONS = ['.js', '.ts', '.jsx', '.tsx'];
     const filesForEndpointScan = scanTarget.getFilesWithExtesions(ENDPOINT_SCAN_EXTENSIONS);
-    console.log(`Scanning ${filesForEndpointScan.length} files for potentially exposed endpoints...`);
+    /*console.log(`Scanning ${filesForEndpointScan.length} files for potentially exposed endpoints...`);
     filesForEndpointScan.forEach(filePath => {
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
@@ -148,7 +104,7 @@ program.command('scan')
             // Avoid crashing if a single file fails (e.g., read permission)
             console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for endpoints: ${error.message}`));
         }
-    });
+    });*/
 
     // --- Rate Limit Heuristic Check (Phase 6.4 - Revised) ---
     console.log('Checking for presence of known rate limiting packages and API routes...');
