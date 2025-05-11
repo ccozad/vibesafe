@@ -4,15 +4,16 @@
 import 'dotenv/config';
 
 import { Command } from 'commander';
-import { scanFileForSecrets, SecretFinding } from './scanners/secrets';
+import { SecretFinding } from './scanners/secrets';
 import { detectPackageManagers, parseDependencies, lookupCves, DependencyInfo, DependencyFinding, FindingSeverity } from './scanners/dependencies';
-import { getFilesToScan, checkGitignoreStatus, GitignoreWarning } from './utils/fileTraversal';
+import { checkGitignoreStatus, GitignoreWarning } from './utils/fileTraversal';
 import { generateMarkdownReport } from './reporting/markdown';
 
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { ScanOptions } from './utils/scanOptions'
+import { ScanTarget } from './utils/scanTarget';
 import { scanConfigFile, ConfigFinding } from './scanners/configuration';
 import { scanForUnvalidatedUploads, UploadFinding } from './scanners/uploads';
 import { scanForExposedEndpoints, EndpointFinding } from './scanners/endpoints';
@@ -20,6 +21,8 @@ import { checkRateLimitHeuristic, RateLimitFinding } from './scanners/rateLimiti
 import { scanForLoggingIssues, LoggingFinding } from './scanners/logging';
 import { scanForHttpClientIssues, HttpClientFinding } from './scanners/httpClient';
 import { detectTechnologies, DetectedTechnologies } from './frameworkDetection';
+
+import { createAllVibeChecks } from './vibechecks/createAllVibeChecks';
 
 // --- VibeSafe Installer Imports ---
 import { fetchPackageMetadata, fetchPackageDownloads } from './installer/npmRegistryClient';
@@ -57,6 +60,7 @@ program.command('scan')
   .option('--high-only', 'Only report high severity issues')
   .action(async (directory, options) => {
     const scanOptions = new ScanOptions(directory, options);
+    const scanTarget = new ScanTarget(scanOptions.getRootDirectory());
     
     // --- Moved: Check .gitignore Status --- 
     // We will call checkGitignoreStatus later, just declare the variable here
@@ -71,13 +75,9 @@ program.command('scan')
     let allRateLimitFindings: RateLimitFinding[] = [];
     let allLoggingFindings: LoggingFinding[] = [];
     let allHttpClientFindings: HttpClientFinding[] = [];
-
-    // --- File Traversal (Phase 2.2) ---
-    const filesToScan = getFilesToScan(directory);
-    const configFilesToScan = filesToScan.filter(f => /\.(json|ya?ml)$/i.test(f));
-
+ 
     // --- Detect Package Manager (Phase 3.1) ---
-    const detectedManagers = detectPackageManagers(filesToScan, scanOptions.getRootDirectory());
+    const detectedManagers = detectPackageManagers(scanTarget.getFiles(), scanOptions.getRootDirectory());
     // Use Object.keys() to get the names from the map for logging
     const managerNames = Object.keys(detectedManagers);
     console.log(`Detected package managers: ${managerNames.length > 0 ? managerNames.join(', ') : 'none'}`);
@@ -129,13 +129,28 @@ program.command('scan')
         }
     }
 
+    const allVibeChecks = createAllVibeChecks();
+
+    for(let i = 0; i < allVibeChecks.length; i++) {
+        const vibeCheck = allVibeChecks[i];
+        if (vibeCheck.isRequired(scanOptions, scanTarget)) {
+            console.log(`Checking for ${vibeCheck.getName()}...`);
+            const result = await vibeCheck.run(scanOptions, scanTarget);
+            // Handle the result as needed
+            // For now, just log the findings
+            console.log(`Findings:`, result.findings);
+        } else {
+            console.log(`${vibeCheck.getName()} is not required for this scan.`);
+        }
+    }
+
     // --- Secrets Scan (Phase 2.1 / 2.3) ---
-    console.log(`Scanning ${filesToScan.length} files for secrets...`);
-    filesToScan.forEach(filePath => {
+    /*console.log(`Scanning ${scanTarget.getFiles().length} files for secrets...`);
+    scanTarget.getFiles().forEach(filePath => {
         const findings = scanFileForSecrets(filePath);
         const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
         allSecretFindings = allSecretFindings.concat(relativeFindings);
-    });
+    });*/
 
     // --- Dependency CVE Lookup (Phase 3.3 & 3.4) ---
     if (dependencyInfoList.length > 0) {
@@ -148,17 +163,18 @@ program.command('scan')
     }
 
     // --- Configuration Scan (Phase 6.1) ---
-    console.log(`Scanning ${configFilesToScan.length} potential config files...`);
-    configFilesToScan.forEach(filePath => {
+    /*const configFiles = scanTarget.getFilesMatching(/\.config\.(json|ya?ml)$/i);
+    console.log(`Scanning ${configFiles.length} potential config files...`);
+    configFiles.forEach(filePath => {
         const findings = scanConfigFile(filePath);
         const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
         allConfigFindings = allConfigFindings.concat(relativeFindings);
-    });
+    });*/
 
     // --- Upload Scan (Phase 6.2) ---
     // Define file extensions relevant for upload checks
-    const UPLOAD_SCAN_EXTENSIONS = new Set(['.js', '.ts', '.jsx', '.tsx', '.vue', '.html']);
-    const filesForUploadScan = filesToScan.filter(f => UPLOAD_SCAN_EXTENSIONS.has(path.extname(f).toLowerCase()));
+    const UPLOAD_SCAN_EXTENSIONS = ['.js', '.ts', '.jsx', '.tsx', '.vue', '.html'];
+    const filesForUploadScan = scanTarget.getFilesWithExtesions(UPLOAD_SCAN_EXTENSIONS);
     console.log(`Scanning ${filesForUploadScan.length} files for potential upload issues...`);
     filesForUploadScan.forEach(filePath => {
         try {
@@ -174,8 +190,8 @@ program.command('scan')
 
     // --- Endpoint Scan (Phase 6.3) ---
     // Define file extensions relevant for endpoint checks (JS/TS files)
-    const ENDPOINT_SCAN_EXTENSIONS = new Set(['.js', '.ts', '.jsx', '.tsx']);
-    const filesForEndpointScan = filesToScan.filter(f => ENDPOINT_SCAN_EXTENSIONS.has(path.extname(f).toLowerCase()));
+    const ENDPOINT_SCAN_EXTENSIONS = ['.js', '.ts', '.jsx', '.tsx'];
+    const filesForEndpointScan = scanTarget.getFilesWithExtesions(ENDPOINT_SCAN_EXTENSIONS);
     console.log(`Scanning ${filesForEndpointScan.length} files for potentially exposed endpoints...`);
     filesForEndpointScan.forEach(filePath => {
         try {
