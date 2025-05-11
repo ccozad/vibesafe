@@ -139,7 +139,7 @@ function scoreToSeverity(score: number): FindingSeverity {
 }
 
 // Define the return type for the detection function
-type DetectedFilesMap = { [key in PackageManager]?: { manifest?: string, lock?: string } };
+export type DetectedFilesMap = { [key in PackageManager]?: { manifest?: string, lock?: string } };
 
 // --- Detection Logic ---
 

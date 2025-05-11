@@ -32,7 +32,7 @@ export class ConfigVibeCheck implements VibeCheck {
                 });
                 resolve( new VibeCheckResult("Config", allFindings) );
             } catch (error) {
-                console.error('Error during secret scan:', error);
+                console.error('Error during config scan:', error);
                 reject(error);
             }
         });

@@ -5,7 +5,7 @@ import 'dotenv/config';
 
 import { Command } from 'commander';
 import { SecretFinding } from './scanners/secrets';
-import { detectPackageManagers, parseDependencies, lookupCves, DependencyInfo, DependencyFinding, FindingSeverity } from './scanners/dependencies';
+import { lookupCves, DependencyFinding, FindingSeverity } from './scanners/dependencies';
 import { checkGitignoreStatus, GitignoreWarning } from './utils/fileTraversal';
 import { generateMarkdownReport } from './reporting/markdown';
 
@@ -14,14 +14,12 @@ import path from 'path';
 import chalk from 'chalk';
 import { ScanOptions } from './utils/scanOptions'
 import { ScanTarget } from './utils/scanTarget';
-import { scanConfigFile, ConfigFinding } from './scanners/configuration';
-import { scanForUnvalidatedUploads, UploadFinding } from './scanners/uploads';
+import { ConfigFinding } from './scanners/configuration';
+import { UploadFinding } from './scanners/uploads';
 import { scanForExposedEndpoints, EndpointFinding } from './scanners/endpoints';
 import { checkRateLimitHeuristic, RateLimitFinding } from './scanners/rateLimiting';
 import { scanForLoggingIssues, LoggingFinding } from './scanners/logging';
 import { scanForHttpClientIssues, HttpClientFinding } from './scanners/httpClient';
-import { detectTechnologies, DetectedTechnologies } from './frameworkDetection';
-
 import { createAllVibeChecks } from './vibechecks/createAllVibeChecks';
 
 // --- VibeSafe Installer Imports ---
@@ -76,59 +74,6 @@ program.command('scan')
     let allLoggingFindings: LoggingFinding[] = [];
     let allHttpClientFindings: HttpClientFinding[] = [];
  
-    // --- Detect Package Manager (Phase 3.1) ---
-    const detectedManagers = detectPackageManagers(scanTarget.getFiles(), scanOptions.getRootDirectory());
-    // Use Object.keys() to get the names from the map for logging
-    const managerNames = Object.keys(detectedManagers);
-    console.log(`Detected package managers: ${managerNames.length > 0 ? managerNames.join(', ') : 'none'}`);
-
-    // --- Parse Dependencies (Phase 3.2) ---
-    const dependencyInfoList = parseDependencies(detectedManagers);
-    let detectedTech: DetectedTechnologies = {
-        hasFrontend: false,
-        hasBackend: false,
-        isNextJs: false,
-        hasAuth: false,
-        hasMiddleware: false,
-        hasHttpClient: false,
-        hasCors: false,
-        hasFileUpload: false,
-    };
-
-    if (dependencyInfoList.length > 0) {
-        console.log(`Parsed ${dependencyInfoList.length} dependencies.`);
-        // --- Detect Technologies (Phase 0 Integration) ---
-        const dependencyNames = dependencyInfoList.map(dep => dep.name);
-        detectedTech = detectTechnologies(dependencyNames);
-        // console.log('Detected Technologies:', detectedTech); // Remove raw log
-
-        // --- Log Detected Technologies --- 
-        if (detectedTech.isNextJs) {
-            console.log(chalk.blue('Detected Technology: Next.js (Full-stack framework)'));
-        } else {
-            // Fallback to generic category logging if not Next.js or if more specific logging is needed later
-            const detectedCategories = Object.entries(detectedTech)
-                .filter(([, value]) => value) // Filter out isNextJs if already logged, or keep for completeness
-                .map(([key]) => key);
-
-            if (detectedCategories.length > 0) {
-                console.log(chalk.blue('Detected Technology Categories:'));
-                detectedCategories.forEach(categoryKey => {
-                    if (categoryKey === 'isNextJs') return; // Avoid double logging if we decide to keep it in categories
-                    const categoryName = categoryKey
-                        .replace('has', '') // Remove 'has' prefix
-                        .replace(/([A-Z])/g, ' $1') // Add space before capital letters
-                        .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
-                        .trim(); 
-                    console.log(chalk.blue(`  - ${categoryName}`));
-                });
-            } else {
-                // Optionally log if nothing specific was detected
-                // console.log(chalk.dim('No specific framework/library categories detected based on dependencies.'));
-            }
-        }
-    }
-
     const allVibeChecks = createAllVibeChecks();
 
     for(let i = 0; i < allVibeChecks.length; i++) {
@@ -153,8 +98,8 @@ program.command('scan')
     });*/
 
     // --- Dependency CVE Lookup (Phase 3.3 & 3.4) ---
-    if (dependencyInfoList.length > 0) {
-        allDependencyFindings = await lookupCves(dependencyInfoList);
+    if (scanTarget.hasDependencies()) {
+        allDependencyFindings = await lookupCves(scanTarget.getDependencies());
         const vulnCount = allDependencyFindings.reduce((count, dep) => count + dep.vulnerabilities.length, 0);
         const highOrCriticalVulnCount = allDependencyFindings.filter(dep => dep.maxSeverity === 'High' || dep.maxSeverity === 'Critical').length;
         console.log(`CVE lookup complete. Found ${vulnCount} vulnerabilities (${highOrCriticalVulnCount} High/Critical) across dependencies.`);
@@ -173,7 +118,7 @@ program.command('scan')
 
     // --- Upload Scan (Phase 6.2) ---
     // Define file extensions relevant for upload checks
-    const UPLOAD_SCAN_EXTENSIONS = ['.js', '.ts', '.jsx', '.tsx', '.vue', '.html'];
+    /*const UPLOAD_SCAN_EXTENSIONS = ['.js', '.ts', '.jsx', '.tsx', '.vue', '.html'];
     const filesForUploadScan = scanTarget.getFilesWithExtesions(UPLOAD_SCAN_EXTENSIONS);
     console.log(`Scanning ${filesForUploadScan.length} files for potential upload issues...`);
     filesForUploadScan.forEach(filePath => {
@@ -186,7 +131,7 @@ program.command('scan')
             // Avoid crashing if a single file fails (e.g., read permission)
             console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for uploads: ${error.message}`));
         }
-    });
+    });*/
 
     // --- Endpoint Scan (Phase 6.3) ---
     // Define file extensions relevant for endpoint checks (JS/TS files)
@@ -196,7 +141,7 @@ program.command('scan')
     filesForEndpointScan.forEach(filePath => {
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForExposedEndpoints(scanOptions.getRootDirectory(), filePath, content, detectedTech);
+            const findings = scanForExposedEndpoints(scanOptions.getRootDirectory(), filePath, content, scanTarget.getDetectedTech());
             const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
             allEndpointFindings = allEndpointFindings.concat(relativeFindings);
         } catch (error: any) {
@@ -208,7 +153,7 @@ program.command('scan')
     // --- Rate Limit Heuristic Check (Phase 6.4 - Revised) ---
     console.log('Checking for presence of known rate limiting packages and API routes...');
     // Pass all parsed dependencies, files, and detected tech context
-    allRateLimitFindings = checkRateLimitHeuristic(dependencyInfoList, filesForEndpointScan, detectedTech);
+    allRateLimitFindings = checkRateLimitHeuristic(scanTarget.getDependencies(), filesForEndpointScan, scanTarget.getDetectedTech());
     if (allRateLimitFindings.length > 0) {
         console.log(chalk.yellow('Found API routes but no known rate-limiting package in dependencies. Added project-level advisory.'));
     } else {
@@ -220,7 +165,7 @@ program.command('scan')
     filesForEndpointScan.forEach(filePath => {
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForLoggingIssues(filePath, content, detectedTech.hasBackend);
+            const findings = scanForLoggingIssues(filePath, content, scanTarget.getDetectedTech().hasBackend);
             const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
             allLoggingFindings = allLoggingFindings.concat(relativeFindings);
         } catch (error: any) {
@@ -233,7 +178,7 @@ program.command('scan')
     filesForEndpointScan.forEach(filePath => {
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForHttpClientIssues(filePath, content, detectedTech.hasBackend);
+            const findings = scanForHttpClientIssues(filePath, content, scanTarget.getDetectedTech().hasBackend);
             const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
             allHttpClientFindings = allHttpClientFindings.concat(relativeFindings);
         } catch (error: any) {
