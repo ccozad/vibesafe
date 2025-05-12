@@ -10,16 +10,15 @@ import { checkGitignoreStatus, GitignoreWarning } from './utils/fileTraversal';
 import { generateMarkdownReport } from './reporting/markdown';
 
 import fs from 'fs';
-import path from 'path';
 import chalk from 'chalk';
 import { ScanOptions } from './utils/scanOptions'
 import { ScanTarget } from './utils/scanTarget';
 import { ConfigFinding } from './scanners/configuration';
 import { UploadFinding } from './scanners/uploads';
 import { EndpointFinding } from './scanners/endpoints';
-import { checkRateLimitHeuristic, RateLimitFinding } from './scanners/rateLimiting';
-import { scanForLoggingIssues, LoggingFinding } from './scanners/logging';
-import { scanForHttpClientIssues, HttpClientFinding } from './scanners/httpClient';
+import { RateLimitFinding } from './scanners/rateLimiting';
+import { LoggingFinding } from './scanners/logging';
+import { HttpClientFinding } from './scanners/httpClient';
 import { createAllVibeChecks } from './vibechecks/createAllVibeChecks';
 
 // --- VibeSafe Installer Imports ---
@@ -88,60 +87,6 @@ program.command('scan')
             console.log(`${vibeCheck.getName()} is not required for this scan.`);
         }
     }
-
-    // --- Endpoint Scan (Phase 6.3) ---
-    // Define file extensions relevant for endpoint checks (JS/TS files)
-    const ENDPOINT_SCAN_EXTENSIONS = ['.js', '.ts', '.jsx', '.tsx'];
-    const filesForEndpointScan = scanTarget.getFilesWithExtesions(ENDPOINT_SCAN_EXTENSIONS);
-    /*console.log(`Scanning ${filesForEndpointScan.length} files for potentially exposed endpoints...`);
-    filesForEndpointScan.forEach(filePath => {
-        try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForExposedEndpoints(scanOptions.getRootDirectory(), filePath, content, scanTarget.getDetectedTech());
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
-            allEndpointFindings = allEndpointFindings.concat(relativeFindings);
-        } catch (error: any) {
-            // Avoid crashing if a single file fails (e.g., read permission)
-            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for endpoints: ${error.message}`));
-        }
-    });*/
-
-    // --- Rate Limit Heuristic Check (Phase 6.4 - Revised) ---
-    console.log('Checking for presence of known rate limiting packages and API routes...');
-    // Pass all parsed dependencies, files, and detected tech context
-    allRateLimitFindings = checkRateLimitHeuristic(scanTarget.getDependencies(), filesForEndpointScan, scanTarget.getDetectedTech());
-    if (allRateLimitFindings.length > 0) {
-        console.log(chalk.yellow('Found API routes but no known rate-limiting package in dependencies. Added project-level advisory.'));
-    } else {
-        console.log('Rate limiting check passed (either known package found or no routes detected).');
-    }
-
-    // --- Logging Scan (Phase 6.5) ---
-    console.log(`Scanning ${filesForEndpointScan.length} files for potential logging issues...`);
-    filesForEndpointScan.forEach(filePath => {
-        try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForLoggingIssues(filePath, content, scanTarget.getDetectedTech().hasBackend);
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
-            allLoggingFindings = allLoggingFindings.concat(relativeFindings);
-        } catch (error: any) {
-            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for logging issues: ${error.message}`));
-        }
-    });
-
-    // --- HTTP Client Scan (Phase 6.4.2) ---
-    console.log(`Scanning ${filesForEndpointScan.length} files for potential HTTP client issues...`);
-    filesForEndpointScan.forEach(filePath => {
-        try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanForHttpClientIssues(filePath, content, scanTarget.getDetectedTech().hasBackend);
-            const relativeFindings = findings.map(f => ({ ...f, file: path.relative(scanOptions.getRootDirectory(), f.file) }));
-            allHttpClientFindings = allHttpClientFindings.concat(relativeFindings);
-        } catch (error: any) {
-            // Avoid crashing if a single file fails
-            console.warn(chalk.yellow(`Could not scan ${path.relative(scanOptions.getRootDirectory(), filePath)} for HTTP client issues: ${error.message}`));
-        }
-    });
 
     // --- DEBUG: Log counts after collection ---
     // console.log(`[DEBUG] Counts - Secrets: ${allSecretFindings.length}, Dependencies: ${allDependencyFindings.length}, Config: ${allConfigFindings.length}, Uploads: ${allUploadFindings.length}, Endpoints: ${allEndpointFindings.length}, RateLimit: ${allRateLimitFindings.length}, Logging: ${allLoggingFindings.length}, HttpClient: ${allHttpClientFindings.length}`);
