@@ -7,6 +7,7 @@ import { EndPointVibeCheck } from './endPointVibeCheck';
 import { RateLimitVibeCheck } from './rateLimitVibeCheck';
 import { LoggingVibeCheck } from './loggingVibeCheck';
 import { HttpClientVibeCheck } from './httpClientVibeCheck';
+import { GitIgnoreVibeCheck } from './gitIgnoreVibeCheck';
 
 export function createAllVibeChecks(): VibeCheck[] {
     return [
@@ -18,6 +19,7 @@ export function createAllVibeChecks(): VibeCheck[] {
         new RateLimitVibeCheck(),
         new LoggingVibeCheck(),
         new HttpClientVibeCheck(),
+        new GitIgnoreVibeCheck(),
         // Add other vibe checks here
     ];
 }

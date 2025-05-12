@@ -6,7 +6,7 @@ import 'dotenv/config';
 import { Command } from 'commander';
 import { SecretFinding } from './scanners/secrets';
 import { DependencyFinding, FindingSeverity } from './scanners/dependencies';
-import { checkGitignoreStatus, GitignoreWarning } from './utils/fileTraversal';
+import { GitignoreWarning } from './utils/fileTraversal';
 import { generateMarkdownReport } from './reporting/markdown';
 
 import fs from 'fs';
@@ -136,7 +136,7 @@ program.command('scan')
         : allHttpClientFindings;
 
     // --- NOW Check Gitignore Status --- 
-    gitignoreWarnings = checkGitignoreStatus(scanOptions.getRootDirectory());
+    //gitignoreWarnings = checkGitignoreStatus(scanOptions.getRootDirectory());
 
     // --- Report Generation (Phase 4) ---
     if (scanOptions.getReportPath()) {
