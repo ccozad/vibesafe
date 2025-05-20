@@ -4,6 +4,9 @@
 import 'dotenv/config';
 
 import { Command } from 'commander';
+import { ReportFactory } from './reporting/reportFactory';
+import { ReportResults } from './reporting/reportResults';
+
 import { SecretFinding } from './scanners/secrets';
 import { DependencyFinding, FindingSeverity } from './scanners/dependencies';
 import { GitignoreWarning } from './utils/fileTraversal';
@@ -26,6 +29,7 @@ import { fetchPackageMetadata, fetchPackageDownloads } from './installer/npmRegi
 import { checkPackageAge, HeuristicWarning, checkDownloadVolume, checkReadmePresence, checkLicensePresence, checkRepositoryPresence } from './installer/heuristicChecks';
 import readline from 'readline'; // Added for user input
 import { spawn } from 'child_process'; // Added for spawning npm
+import { VibeCheckResult } from './vibechecks/vibeCheckResult';
 // We will add more imports from './installer/*' here as we build out features
 
 // Define a combined finding type if needed later
@@ -39,6 +43,26 @@ function colorSeverity(severity: FindingSeverity | SecretFinding['severity'] | U
         case 'Low': return chalk.blue(severity);
         case 'None': return chalk.gray(severity);
         default: return severity;
+    }
+}
+
+function saveResults(storage: any, result: VibeCheckResult) {
+    // Save the result to the storage
+    if (!storage[result.category]) {
+        storage[result.category] = [];
+    }
+    storage[result.category].push(...result.findings);
+}
+
+function printReportResults(results: ReportResults) {
+    // Print a message to the console if the report did not succeed
+    if (!results.success) {
+        console.error(chalk.red(`\nFailed to generate report: ${results.error}`));
+    } else {
+        // If the report has a path, print the path
+        if (results.filePath) {
+            console.log(chalk.green(`\nReport generated successfully at ${results.filePath}`));
+        }
     }
 }
 
@@ -56,20 +80,7 @@ program.command('scan')
   .option('-r, --report [file]', 'Specify Markdown report file path (defaults to VIBESAFE-REPORT.md)')
   .option('--high-only', 'Only report high severity issues')
   .action(async (directory, options) => {
-    // --- Moved: Check .gitignore Status --- 
-    // We will call checkGitignoreStatus later, just declare the variable here
-    let gitignoreWarnings: GitignoreWarning[] = [];
-
-    // --- Findings Aggregation ---
-    let allSecretFindings: SecretFinding[] = [];
-    let allDependencyFindings: DependencyFinding[] = [];
-    let allConfigFindings: ConfigFinding[] = [];
-    let allUploadFindings: UploadFinding[] = [];
-    let allEndpointFindings: EndpointFinding[] = [];
-    let allRateLimitFindings: RateLimitFinding[] = [];
-    let allLoggingFindings: LoggingFinding[] = [];
-    let allHttpClientFindings: HttpClientFinding[] = [];
-
+    const storage: any = {}; // Temporary storage for findings
     const scanOptions = new ScanOptions(directory, options);
     const scanTarget = new ScanTarget(scanOptions.getRootDirectory());
  
@@ -80,20 +91,52 @@ program.command('scan')
         if (vibeCheck.isRequired(scanOptions, scanTarget)) {
             console.log(`Checking for ${vibeCheck.getName()}...`);
             const result = await vibeCheck.run(scanOptions, scanTarget);
-            // Handle the result as needed
-            // For now, just log the findings
-            console.log(`Findings:`, result.findings);
+            saveResults(storage, result);
         } else {
             console.log(`${vibeCheck.getName()} is not required for this scan.`);
         }
     }
+
+    const report = ReportFactory.createFromOptions(scanOptions);
+    //const summary = ReportFactory.create('console-summary');
+    const reportResults = await report.generate(storage);
+    printReportResults(reportResults);
+    //await summary.generate(storage);
+
+
+    // Notes
+    // We have a number of different type specific findings
+    // Findings are filtered based on severity
+    // Findings are collected into a large object
+    // Reports are generated for report types markdown, json and console
+    // A summary is printed to the console
+
+    // How I want the code to work:
+    // Collect all finding in an object organized by vibCheck category
+    // Use composition pattern to create a report
+    // Each report type has its own class
+
+
+    // --- Moved: Check .gitignore Status --- 
+    // We will call checkGitignoreStatus later, just declare the variable here
+    /*let gitignoreWarnings: GitignoreWarning[] = [];
+
+    // --- Findings Aggregation ---
+    let allSecretFindings: SecretFinding[] = [];
+    let allDependencyFindings: DependencyFinding[] = [];
+    let allConfigFindings: ConfigFinding[] = [];
+    let allUploadFindings: UploadFinding[] = [];
+    let allEndpointFindings: EndpointFinding[] = [];
+    let allRateLimitFindings: RateLimitFinding[] = [];
+    let allLoggingFindings: LoggingFinding[] = [];
+    let allHttpClientFindings: HttpClientFinding[] = [];*/
 
     // --- DEBUG: Log counts after collection ---
     // console.log(`[DEBUG] Counts - Secrets: ${allSecretFindings.length}, Dependencies: ${allDependencyFindings.length}, Config: ${allConfigFindings.length}, Uploads: ${allUploadFindings.length}, Endpoints: ${allEndpointFindings.length}, RateLimit: ${allRateLimitFindings.length}, Logging: ${allLoggingFindings.length}, HttpClient: ${allHttpClientFindings.length}`);
     // ----------------------------------------
 
     // Separate Info findings
-    const infoSecretFindings = allSecretFindings.filter(f => f.severity === 'Info');
+    /*const infoSecretFindings = allSecretFindings.filter(f => f.severity === 'Info');
     const standardSecretFindings = allSecretFindings.filter(f => f.severity !== 'Info');
 
     // --- Filtering & Reporting (Phase 2.3 / 3.4) --- 
@@ -423,7 +466,7 @@ program.command('scan')
     } else {
         console.log('\nScan complete.');
         process.exit(0);
-    }
+    }*/
 
   });
 
