@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
 import { scanForExposedEndpoints } from "../scanners/endpoints";
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class EndPointVibeCheck implements VibeCheck {
     getName(): string {
@@ -14,7 +15,7 @@ export class EndPointVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "Endpoint";
+        return VibeCheckCategory.Endpoints;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -42,7 +43,7 @@ export class EndPointVibeCheck implements VibeCheck {
                     }
                 });
 
-                resolve( new VibeCheckResult("Endpoint", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.Endpoints, allFindings) );
             } catch (error) {
                 console.error('Error during upload scan:', error);
                 reject(error);

@@ -4,6 +4,7 @@ import { VibeCheck } from "./vibeCheck";
 import { VibeCheckResult } from "./vibeCheckResult";
 import { scanFileForSecrets } from '../scanners/secrets';
 import path from 'path';
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class SecretVibeCheck implements VibeCheck {
     getName(): string {
@@ -11,7 +12,7 @@ export class SecretVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "Secrets";
+        return VibeCheckCategory.Secrets;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -29,7 +30,7 @@ export class SecretVibeCheck implements VibeCheck {
                     const relativeFindings = findings.map(f => ({ ...f, file: path.relative(options.getRootDirectory(), f.file) }));
                     allFindings.push(...relativeFindings);
                 });
-                resolve( new VibeCheckResult("Secrets", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.Secrets, allFindings) );
             } catch (error) {
                 console.error('Error during secret scan:', error);
                 reject(error);

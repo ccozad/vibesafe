@@ -5,6 +5,7 @@ import { VibeCheckResult } from "./vibeCheckResult";
 
 import chalk from 'chalk';
 import { checkRateLimitHeuristic } from "../scanners/rateLimiting";
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class RateLimitVibeCheck implements VibeCheck {
     getName(): string {
@@ -12,7 +13,7 @@ export class RateLimitVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "Rate Limit";
+        return VibeCheckCategory.RateLimitAdvisory;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -38,7 +39,7 @@ export class RateLimitVibeCheck implements VibeCheck {
                     console.log('Rate limiting check passed (either known package found or no routes detected).');
                 }
 
-                resolve( new VibeCheckResult("Rate Limit", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.RateLimitAdvisory, allFindings) );
             } catch (error) {
                 console.error('Error during rate limit scan:', error);
                 reject(error);

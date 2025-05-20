@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
 import { scanForLoggingIssues } from "../scanners/logging";
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class LoggingVibeCheck implements VibeCheck {
     getName(): string {
@@ -14,7 +15,7 @@ export class LoggingVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "Logging";
+        return VibeCheckCategory.Logging;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -40,7 +41,7 @@ export class LoggingVibeCheck implements VibeCheck {
                     }
                 });
 
-                resolve( new VibeCheckResult("Logging", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.Logging, allFindings) );
             } catch (error) {
                 console.error('Error during logging scan:', error);
                 reject(error);

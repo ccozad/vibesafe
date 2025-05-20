@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
 import { scanForHttpClientIssues } from "../scanners/httpClient";
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class HttpClientVibeCheck implements VibeCheck {
     getName(): string {
@@ -14,7 +15,7 @@ export class HttpClientVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "HTTP Client";
+        return VibeCheckCategory.HttpClients;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -41,7 +42,7 @@ export class HttpClientVibeCheck implements VibeCheck {
                     }
                 });
 
-                resolve( new VibeCheckResult("HTTP Client", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.HttpClients, allFindings) );
             } catch (error) {
                 console.error('Error during HTTP client scan:', error);
                 reject(error);

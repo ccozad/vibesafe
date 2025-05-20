@@ -3,14 +3,15 @@ import { ScanTarget } from "../utils/scanTarget";
 import { VibeCheck } from "./vibeCheck";
 import { VibeCheckResult } from "./vibeCheckResult";
 import { checkGitignoreStatus } from "../utils/fileTraversal";
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class GitIgnoreVibeCheck implements VibeCheck {
     getName(): string {
-        return "GIT ignore issues";
+        return "Git ignore issues";
     }
 
     getCategory(): string {
-        return "GIT Ignore";
+        return VibeCheckCategory.GitIgnore;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -23,7 +24,7 @@ export class GitIgnoreVibeCheck implements VibeCheck {
                 // --- Secrets Scan (Phase 2.1 / 2.3) ---
                 console.log(`Scanning ${target.getFiles().length} files for secrets...`);
                 const gitignoreWarnings = checkGitignoreStatus(options.getRootDirectory());
-                resolve( new VibeCheckResult("GIT Ignore", gitignoreWarnings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.GitIgnore, gitignoreWarnings) );
             } catch (error) {
                 console.error('Error during GIT ignore scan:', error);
                 reject(error);

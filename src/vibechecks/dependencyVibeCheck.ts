@@ -4,6 +4,7 @@ import { VibeCheck } from "./vibeCheck";
 import { VibeCheckResult } from "./vibeCheckResult";
 
 import { lookupCves } from "../scanners/dependencies";
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class DependencyVibeCheck implements VibeCheck {
     getName(): string {
@@ -11,7 +12,7 @@ export class DependencyVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "Dependency";
+        return VibeCheckCategory.Dependencies;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -29,7 +30,7 @@ export class DependencyVibeCheck implements VibeCheck {
                 const highOrCriticalVulnCount = allDependencyFindings.filter(dep => dep.maxSeverity === 'High' || dep.maxSeverity === 'Critical').length;
                 console.log(`CVE lookup complete. Found ${vulnCount} vulnerabilities (${highOrCriticalVulnCount} High/Critical) across dependencies.`);
 
-                resolve( new VibeCheckResult("Dependency", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.Dependencies, allFindings) );
             } catch (error) {
                 console.error('Error during dependency scan:', error);
                 reject(error);

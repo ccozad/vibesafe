@@ -97,12 +97,12 @@ program.command('scan')
         }
     }
 
-    const report = ReportFactory.createFromOptions(scanOptions);
-    //const summary = ReportFactory.create('console-summary');
-    const reportResults = await report.generate(storage);
-    printReportResults(reportResults);
-    //await summary.generate(storage);
-
+    // Use this when the move is complete
+    //const report = ReportFactory.createFromOptions(scanOptions);
+    const report = ReportFactory.create('console');
+    const summary = ReportFactory.create('console-summary');
+    await report.generate(storage);
+    await summary.generate(storage);
 
     // Notes
     // We have a number of different type specific findings
@@ -416,49 +416,6 @@ program.command('scan')
         
 
     // --- Final Summary --- 
-    console.log(chalk.bold('\n--- Scan Summary ---'));
-    const summaryPoints = [
-        { emoji: '🔑', label: 'Secrets', count: reportSecretFindings.length },
-        { emoji: '📦', label: 'Dependencies', count: reportDependencyFindings.length },
-        { emoji: '⚙️', label: 'Configuration', count: reportConfigFindings.length },
-        { emoji: '⬆️', label: 'Uploads', count: reportUploadFindings.length },
-        { emoji: '🔌', label: 'Endpoints', count: reportEndpointFindings.length },
-        { emoji: '📝', label: 'Logging', count: reportLoggingFindings.length }, 
-        { emoji: '🌐', label: 'HTTP Clients', count: reportHttpClientFindings.length },
-        { emoji: '⏳', label: 'Rate Limit Advisory', count: reportRateLimitFindings.length }, // Will be 0 or 1
-        { emoji: '💡', label: 'Info (.env)', count: infoSecretFindings.length },
-        { emoji: '⚠️', label: 'Config Warnings', count: gitignoreWarnings.length },
-    ];
-
-    // Calculate padding for alignment
-    let maxLabelWidth = 0;
-    summaryPoints.forEach(point => {
-        if (point.count > 0) {
-            const labelWidth = point.label.length; // Emoji width can vary, focus on label
-            if (labelWidth > maxLabelWidth) {
-                maxLabelWidth = labelWidth;
-            }
-        }
-    });
-    const firstColWidth = maxLabelWidth + 4; // emoji + space + label + space buffer
-
-    summaryPoints.forEach(point => {
-        if (point.count > 0) {
-            const labelPart = `${point.emoji} ${point.label}`;
-            console.log(`  ${labelPart.padEnd(firstColWidth)} ${chalk.yellow(point.count)}`);
-        } else {
-            // Optionally hide sections with 0 findings, or show them dimmed
-            // console.log(chalk.dim(`  ${point.emoji} ${point.label}: 0`));
-        }
-    });
-
-    const totalReported = summaryPoints.reduce((sum, point) => sum + point.count, 0);
-    if (totalReported > 0) {
-        console.log(chalk.cyan('\nPlease scroll up to review the detailed findings.'));
-    } else if (!suppressConsole) {
-        // If no findings were reported and console wasn't suppressed, reiterate the all-clear message
-        console.log(chalk.green.bold('✅ No issues found in the scan.'));
-    }
 
     if (options.highOnly && hasHighSeverityIssue) {
         console.log(chalk.red.bold('\nScan complete. High severity issues found. Exiting with code 1.'));

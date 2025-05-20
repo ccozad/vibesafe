@@ -4,6 +4,7 @@ import { VibeCheck } from "./vibeCheck";
 import { VibeCheckResult } from "./vibeCheckResult";
 import { scanConfigFile} from '../scanners/configuration';
 import path from 'path';
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class ConfigVibeCheck implements VibeCheck {
     getName(): string {
@@ -11,7 +12,7 @@ export class ConfigVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "Config";
+        return VibeCheckCategory.Configuration;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -30,7 +31,7 @@ export class ConfigVibeCheck implements VibeCheck {
                     const relativeFindings = findings.map(f => ({ ...f, file: path.relative(options.getRootDirectory(), f.file) }));
                     allFindings.push(...relativeFindings);
                 });
-                resolve( new VibeCheckResult("Config", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.Configuration, allFindings) );
             } catch (error) {
                 console.error('Error during config scan:', error);
                 reject(error);

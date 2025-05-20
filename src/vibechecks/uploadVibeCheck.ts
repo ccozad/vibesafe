@@ -7,6 +7,7 @@ import { scanForUnvalidatedUploads } from '../scanners/uploads';
 import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
+import { VibeCheckCategory } from "./vibeCheckCategory";
 
 export class UploadVibeCheck implements VibeCheck {
     getName(): string {
@@ -14,7 +15,7 @@ export class UploadVibeCheck implements VibeCheck {
     }
 
     getCategory(): string {
-        return "Upload";
+        return VibeCheckCategory.Uploads;
     }
     
     isRequired(options: ScanOptions, target: ScanTarget): boolean {
@@ -42,7 +43,7 @@ export class UploadVibeCheck implements VibeCheck {
                     }
                 });
 
-                resolve( new VibeCheckResult("Upload", allFindings) );
+                resolve( new VibeCheckResult(VibeCheckCategory.Uploads, allFindings) );
             } catch (error) {
                 console.error('Error during upload scan:', error);
                 reject(error);
